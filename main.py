@@ -1,5 +1,7 @@
 import pdfplumber
 import re
+import json
+import os
 
 def extrair_dados_ata(path_pdf):
     with pdfplumber.open(path_pdf) as pdf:
@@ -39,16 +41,29 @@ def extrair_dados_ata(path_pdf):
         inicio_index = texto_completo.find(match_inicio.group(0))
         fim_index = texto_completo.find(match_fim.group(0)) + len(match_fim.group(0))
         corpo_ata = texto_completo[inicio_index:fim_index]
+        corpo_ata = re.sub(
+            r'(Serviço Público Federal\s*Conselho Regional de Engenharia e Agronomia do Tocantins\s*CREA-TO\s*)|'
+            r'(Quadra 106 norte Alameda 17, Lote 10, 77006-070 Palmas – TO\s*www\.crea-to\.org\.br \| Fone: \(63\) 3219-9800\s*)',
+            '', corpo_ata, flags=re.IGNORECASE
+        )
+        corpo_ata = re.sub(r'(?:^|\n)\d{1,3}(?=\s)', '', corpo_ata)
+        corpo_ata = re.sub(r'^1\s+', '', corpo_ata)
+        corpo_ata = corpo_ata.replace('\n', ' ')
+        corpo_ata = corpo_ata.strip()
     else:
         corpo_ata = "Corpo da ata não encontrado"
 
-    lista_integrantes = ""
+    lista_integrantes = []
     if match_fim and match_inicio:
         integrantes_texto = texto_completo[fim_index:]
         integrantes_linhas = re.findall(r'Eng\..+?(?:\n|$)', integrantes_texto)
-        lista_integrantes = "\n".join(linha.strip() for linha in integrantes_linhas if "Serviço Público Federal" not in linha)
+        lista_integrantes = [
+            linha.strip()
+            for linha in integrantes_linhas
+            if "Serviço Público Federal" not in linha and linha.strip()
+        ]
     else:
-        lista_integrantes = "Integrantes não encontrados"
+        lista_integrantes = []
 
     return {
         "numero": numero_ata,
@@ -58,7 +73,7 @@ def extrair_dados_ata(path_pdf):
         "inicio": inicio_ata,
         "fim": fim_ata,
         "texto_completo_ata": corpo_ata,
-        "integrantes": lista_integrantes.strip()
+        "integrantes": lista_integrantes
     }
 
 def parse_data_ptbr(data_str):
@@ -74,7 +89,12 @@ def parse_data_ptbr(data_str):
         return f"{ano}-{mes}-{int(dia):02d}"
     return "Data inválida"
 
-dados = extrair_dados_ata("document.pdf")
+pdf_path = "document.pdf"
+dados = extrair_dados_ata(pdf_path)
+
+txt_path = os.path.splitext(pdf_path)[0] + ".txt"
+with open(txt_path, "w", encoding="utf-8") as f:
+    json.dump(dados, f, ensure_ascii=False, indent=4)
 
 print("Número da Ata:", dados["numero"])
 print("Tipo:", dados["tipo"])
@@ -84,3 +104,4 @@ print("⏱ Início:", dados["inicio"])
 print("✅ Fim:", dados["fim"])
 print("\n📜 Texto da Ata:\n", dados["texto_completo_ata"][:1000], "...")
 print("\n👥 Integrantes:\n", dados["integrantes"])
+print(f"\nArquivo JSON salvo em: {txt_path}")
