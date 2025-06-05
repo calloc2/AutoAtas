@@ -2,6 +2,7 @@ import pdfplumber
 import re
 import json
 import os
+import sys
 
 def extrair_dados_ata(path_pdf):
     with pdfplumber.open(path_pdf) as pdf:
@@ -30,12 +31,27 @@ def extrair_dados_ata(path_pdf):
     )
     inicio_ata = match_inicio.group(1).strip() if match_inicio else "Início não encontrado"
 
+    # Busca padrão principal: trecho entre "Encerramento:" e "minutos"
     match_fim = re.search(
-        r'ITEM [IVXLCDM]+\s*–\s*Encerramento:.*?finalizando a sessão plenária às .*?minutos[.\-–]+',
+        r'Encerramento:(.*?minutos?[.\-–]+)',
         texto_completo,
         re.DOTALL | re.IGNORECASE
     )
-    fim_ata = match_fim.group(0) if match_fim else "Encerramento não encontrado"
+    # Fallback: busca só o trecho "finalizando a sessão plenária ... minutos"
+    if not match_fim:
+        match_fim = re.search(
+            r'finalizando a sessão plenária.*?minutos?[.\-–]+',
+            texto_completo,
+            re.DOTALL | re.IGNORECASE
+        )
+    # Fallback: busca o último "minutos" seguido de ponto/traço
+    if not match_fim:
+        match_fim = re.search(
+            r'([^.]{0,200}minutos?[.\-–]+)', texto_completo[::-1], re.DOTALL | re.IGNORECASE
+        )
+        fim_ata = match_fim.group(1)[::-1].strip() if match_fim else "Encerramento não encontrado"
+    else:
+        fim_ata = match_fim.group(1).strip() if match_fim.lastindex else match_fim.group(0).strip()
 
     if match_inicio and match_fim:
         inicio_index = texto_completo.find(match_inicio.group(0))
@@ -89,19 +105,22 @@ def parse_data_ptbr(data_str):
         return f"{ano}-{mes}-{int(dia):02d}"
     return "Data inválida"
 
-pdf_path = "document.pdf"
-dados = extrair_dados_ata(pdf_path)
+def processar_atas(pdf_paths):
+    for pdf_path in pdf_paths:
+        if not pdf_path.lower().endswith('.pdf'):
+            print(f"Arquivo ignorado (não é PDF): {pdf_path}")
+            continue
+        if not os.path.exists(pdf_path):
+            print(f"Arquivo não encontrado: {pdf_path}")
+            continue
+        dados = extrair_dados_ata(pdf_path)
+        txt_path = os.path.splitext(pdf_path)[0] + ".txt"
+        with open(txt_path, "w", encoding="utf-8") as f:
+            json.dump(dados, f, ensure_ascii=False, indent=4)
+        print(f"Processado: {pdf_path} -> {txt_path}")
 
-txt_path = os.path.splitext(pdf_path)[0] + ".txt"
-with open(txt_path, "w", encoding="utf-8") as f:
-    json.dump(dados, f, ensure_ascii=False, indent=4)
-
-print("Número da Ata:", dados["numero"])
-print("Tipo:", dados["tipo"])
-print("Data:", dados["data"])
-print("Data (ISO):", dados["data_iso"])
-print("⏱ Início:", dados["inicio"])
-print("✅ Fim:", dados["fim"])
-print("\n📜 Texto da Ata:\n", dados["texto_completo_ata"][:1000], "...")
-print("\n👥 Integrantes:\n", dados["integrantes"])
-print(f"\nArquivo JSON salvo em: {txt_path}")
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Uso: python main.py arquivo1.pdf [arquivo2.pdf ...]")
+    else:
+        processar_atas(sys.argv[1:])
