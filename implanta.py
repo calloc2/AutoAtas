@@ -99,3 +99,54 @@ driver.execute_script(
     "document.body.innerHTML = arguments[0];", texto_ata.replace('\n', '<br>')
 )
 driver.switch_to.default_content()
+
+from selenium.webdriver.common.action_chains import ActionChains
+
+for participante in ata["integrantes"]:
+    wait.until(EC.invisibility_of_element_located((By.CSS_SELECTOR, ".modal.in[style*='display: block']")))
+    btn_adicionar = wait.until(
+        EC.element_to_be_clickable((By.CSS_SELECTOR, "a.adicionarGrid[data-bind*='ParticipantesViewModel.ParticipanteAdicionar']"))
+    )
+    driver.execute_script("arguments[0].scrollIntoView(true);", btn_adicionar)
+    time.sleep(0.3)
+    btn_adicionar.click()
+    time.sleep(1)
+    wait = ui.WebDriverWait(driver, 10)
+    select2_participante = wait.until(
+        EC.element_to_be_clickable((By.ID, "select2-IdPessoa-container"))
+    )
+    select2_participante.click()
+    time.sleep(0.5)
+    input_search = wait.until(
+        EC.visibility_of_element_located((By.CSS_SELECTOR, "input.select2-search__field"))
+    )
+    input_search.clear()
+    input_search.send_keys(participante)
+    time.sleep(1)
+
+    first_result = wait.until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, "#select2-IdPessoa-results li.select2-results__option"))
+    )
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#select2-IdPessoa-results li.select2-results__option")))
+    first_result.click()
+    time.sleep(0.5)
+    btn_confirmar = driver.find_element(By.CSS_SELECTOR, ".modal-footer .btnVerde")
+    btn_confirmar.click()
+    time.sleep(1)
+
+pdf_path = ata_path.replace('.txt', '.pdf')
+if os.path.exists(pdf_path):
+    btn_add_anexo = driver.find_element(By.CSS_SELECTOR, "a.adicionarGrid[data-bind*='AnexosViewModel.NovoAnexo']")
+    btn_add_anexo.click()
+    time.sleep(1)
+    file_input = driver.find_element(By.ID, "fileupload")
+    file_input.send_keys(pdf_path)
+    time.sleep(2)
+    btn_enviar = driver.find_element(By.CSS_SELECTOR, ".infoArquivo button.btnAzul")
+    btn_enviar.click()
+    time.sleep(2)
+    btn_confirmar_anexo = driver.find_element(By.CSS_SELECTOR, "button.btnVerde[data-bind*='AnexosViewModel.AnexoSalvar']")
+    btn_confirmar_anexo.click()
+    time.sleep(1)
+else:
+    print(f"Arquivo PDF não encontrado para anexar: {pdf_path}")

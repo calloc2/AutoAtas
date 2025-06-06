@@ -69,15 +69,30 @@ def extrair_dados_ata(path_pdf):
     else:
         corpo_ata = "Corpo da ata não encontrado"
 
+    # Tenta identificar o nome da secretária no texto
+    secretaria_nome = None
+    match_secretaria = re.search(
+        r'para constar, eu ([A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-zA-ZÀ-ú\s]+?) lavrei a presente ata',
+        texto_completo, re.IGNORECASE
+    )
+    if match_secretaria:
+        secretaria_nome = match_secretaria.group(1).strip()
+
     lista_integrantes = []
     if match_fim and match_inicio:
         integrantes_texto = texto_completo[fim_index:]
-        integrantes_linhas = re.findall(r'Eng\..+?(?:\n|$)', integrantes_texto)
-        lista_integrantes = [
-            linha.strip()
-            for linha in integrantes_linhas
-            if "Serviço Público Federal" not in linha and linha.strip()
-        ]
+        # Extrai todos os nomes que começam com Eng. e vão até o próximo Eng. ou fim da linha
+        matches = re.findall(r'Eng\.(?:\s*\w+\.)*\s*([A-ZÁÉÍÓÚÂÊÔÃÕÇ][^E\n]+)', integrantes_texto)
+        for nome in matches:
+            nome = nome.strip()
+            # Se o nome da secretária estiver DENTRO do nome, remove só essa parte
+            if secretaria_nome and secretaria_nome in nome:
+                nome = nome.replace(secretaria_nome, '').strip()
+                # Remove espaços duplicados que podem ficar
+                nome = re.sub(r'\s{2,}', ' ', nome)
+            # Adiciona se não estiver vazio e não for duplicado
+            if nome and nome not in lista_integrantes:
+                lista_integrantes.append(nome)
     else:
         lista_integrantes = []
 
