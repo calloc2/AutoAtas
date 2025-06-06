@@ -95,12 +95,19 @@ import selenium.webdriver.support.expected_conditions as EC
 wait = ui.WebDriverWait(driver, 10)
 iframe = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "iframe.cke_wysiwyg_frame")))
 
-driver.switch_to.frame(iframe)
-driver.execute_script(
-    "document.body.innerHTML = arguments[0];", texto_ata.replace('\n', '<br>')
-)
 driver.switch_to.default_content()
-
+# Use o CKEditor para setar o valor corretamente
+driver.execute_script("""
+    if (window.CKEDITOR && CKEDITOR.instances && CKEDITOR.instances['Deliberacoes']) {
+        CKEDITOR.instances['Deliberacoes'].setData(arguments[0]);
+    } else {
+        // fallback: tenta setar direto no iframe se não achar o CKEditor
+        var iframe = document.querySelector('iframe.cke_wysiwyg_frame');
+        if (iframe && iframe.contentDocument && iframe.contentDocument.body) {
+            iframe.contentDocument.body.innerHTML = arguments[0];
+        }
+    }
+""", texto_ata.replace('\n', '<br>'))
 from selenium.webdriver.common.action_chains import ActionChains
 
 def normalizar_nome(nome):
