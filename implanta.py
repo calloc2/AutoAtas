@@ -2,6 +2,7 @@ import json
 import re
 import time
 import os
+import unicodedata
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -102,8 +103,16 @@ driver.switch_to.default_content()
 
 from selenium.webdriver.common.action_chains import ActionChains
 
+def normalizar_nome(nome):
+    return unicodedata.normalize('NFKD', nome).encode('ASCII', 'ignore').decode('ASCII').lower().strip()
+
 for participante in ata["integrantes"]:
-    wait.until(EC.invisibility_of_element_located((By.CSS_SELECTOR, ".modal.in[style*='display: block']")))
+    # Aguarda o modal anterior fechar (se existir)
+    try:
+        wait.until(EC.invisibility_of_element_located((By.CSS_SELECTOR, ".modal.in")))
+    except:
+        pass  # Se não existir modal, segue normalmente
+
     btn_adicionar = wait.until(
         EC.element_to_be_clickable((By.CSS_SELECTOR, "a.adicionarGrid[data-bind*='ParticipantesViewModel.ParticipanteAdicionar']"))
     )
@@ -124,13 +133,30 @@ for participante in ata["integrantes"]:
     input_search.send_keys(participante)
     time.sleep(1)
 
-    first_result = wait.until(
-        EC.presence_of_element_located((By.CSS_SELECTOR, "#select2-IdPessoa-results li.select2-results__option"))
-    )
-    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#select2-IdPessoa-results li.select2-results__option")))
-    first_result.click()
+    # Aguarda até que o nome do participante apareça em algum dos resultados (tolerante a acentos e caixa)
+    encontrado = False
+    timeout = time.time() + 10  # até 10 segundos
+    while time.time() < timeout:
+        resultados = driver.find_elements(By.CSS_SELECTOR, "#select2-IdPessoa-results li.select2-results__option .selectGrid_8")
+        for r in resultados:
+            if normalizar_nome(participante) in normalizar_nome(r.text):
+                encontrado = True
+                break
+        if encontrado:
+            break
+        time.sleep(0.5)
+    if not encontrado:
+        print(f"Participante não encontrado na lista: {participante}")
+        continue
+
+    # Agora sim, pressiona ENTER para selecionar o primeiro resultado
+    input_search.send_keys(Keys.ENTER)
     time.sleep(0.5)
-    btn_confirmar = driver.find_element(By.CSS_SELECTOR, ".modal-footer .btnVerde")
+
+    # Confirma o participante
+    btn_confirmar = wait.until(
+        EC.element_to_be_clickable((By.CSS_SELECTOR, "button.btnVerde[data-bind*='ParticipantesViewModel.ParticipanteSalvar']"))
+    )
     btn_confirmar.click()
     time.sleep(1)
 
