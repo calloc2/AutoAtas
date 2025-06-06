@@ -6,6 +6,12 @@ from main import extrair_dados_ata
 
 st.title("AutoAtas")
 
+# Campo para o usuário definir o nome do presidente
+presidente_nome = st.text_input(
+    "Nome do Presidente",
+    value="Daniel Iglesias de Carvalho"
+)
+
 uploaded_files = st.file_uploader(
     "Selecione um ou mais arquivos PDF",
     type="pdf",
@@ -20,7 +26,7 @@ if uploaded_files:
             tmp_path = tmp.name
 
         try:
-            dados = extrair_dados_ata(tmp_path)
+            dados = extrair_dados_ata(tmp_path, presidente_nome)
             txt_name = os.path.splitext(uploaded_file.name)[0] + ".txt"
             with open(txt_name, "w", encoding="utf-8") as f:
                 json.dump(dados, f, ensure_ascii=False, indent=4)

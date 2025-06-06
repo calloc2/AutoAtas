@@ -4,7 +4,7 @@ import json
 import os
 import sys
 
-def extrair_dados_ata(path_pdf):
+def extrair_dados_ata(path_pdf, presidente_nome):
     with pdfplumber.open(path_pdf) as pdf:
         texto_completo = ""
         for pagina in pdf.pages:
@@ -69,38 +69,31 @@ def extrair_dados_ata(path_pdf):
     else:
         corpo_ata = "Corpo da ata não encontrado"
 
-    # Tenta identificar o nome da secretária no texto
-    secretaria_nome = None
-    match_secretaria = re.search(
-        r'para constar, eu ([A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-zA-ZÀ-ú\s]+?) lavrei a presente ata',
-        texto_completo, re.IGNORECASE
-    )
-    if match_secretaria:
-        secretaria_nome = match_secretaria.group(1).strip()
-
+    # Integrantes: apenas nomes, sem prefixos
     lista_integrantes = []
     if match_fim and match_inicio:
         integrantes_texto = texto_completo[fim_index:]
-        # Extrai todos os nomes que começam com Eng. e vão até o próximo Eng. ou fim da linha
         matches = re.findall(r'Eng\.(?:\s*\w+\.)*\s*([A-ZÁÉÍÓÚÂÊÔÃÕÇ][^E\n]+)', integrantes_texto)
-        for nome in matches:
+        pulou_primeira_linha = False
+        for idx, nome in enumerate(matches):
             nome = nome.strip()
-            # Remove o nome da secretária se estiver junto
-            if secretaria_nome and secretaria_nome in nome:
-                nome = nome.replace(secretaria_nome, '').strip()
-                nome = re.sub(r'\s{2,}', ' ', nome)
-            # Remove qualquer ponto no início ou fim do nome
+            nome = re.sub(r'\s{2,}', ' ', nome)
             nome = nome.strip('. ')
-            # Remove pontos restantes no nome (caso venham do OCR ou erro de extração)
             nome = nome.replace('.', '')
-            # Adiciona se não estiver vazio e não for duplicado
+            # Pula a primeira linha (presidente + secretaria)
+            if not pulou_primeira_linha:
+                pulou_primeira_linha = True
+                continue
             if nome and nome not in lista_integrantes:
                 lista_integrantes.append(nome)
+        # Adiciona o presidente manualmente como primeiro integrante
+        lista_integrantes.insert(0, presidente_nome)
     else:
         lista_integrantes = []
 
     return {
         "numero": numero_ata,
+        "presidente": presidente_nome,
         "tipo": tipo_ata,
         "data": data_ata,
         "data_iso": data_ata_iso,
