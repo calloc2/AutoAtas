@@ -107,20 +107,29 @@ def normalizar_nome(nome):
     return unicodedata.normalize('NFKD', nome).encode('ASCII', 'ignore').decode('ASCII').lower().strip()
 
 for participante in ata["integrantes"]:
-    # Aguarda o modal anterior fechar (se existir)
     try:
-        wait.until(EC.invisibility_of_element_located((By.CSS_SELECTOR, ".modal.in")))
-    except:
-        pass  # Se não existir modal, segue normalmente
+        wait.until(
+            EC.invisibility_of_element_located((By.CSS_SELECTOR, "#modalParticipante[style*='display: block']"))
+        )
+    except Exception:
+        pass  # Se já estiver fechado, segue normalmente
+
+    driver.execute_script("window.scrollTo(0, 0);")
+    time.sleep(0.2)
 
     btn_adicionar = wait.until(
         EC.element_to_be_clickable((By.CSS_SELECTOR, "a.adicionarGrid[data-bind*='ParticipantesViewModel.ParticipanteAdicionar']"))
     )
-    driver.execute_script("arguments[0].scrollIntoView(true);", btn_adicionar)
-    time.sleep(0.3)
-    btn_adicionar.click()
+    try:
+        btn_adicionar.click()
+    except Exception:
+        driver.execute_script("arguments[0].click();", btn_adicionar)
     time.sleep(1)
-    wait = ui.WebDriverWait(driver, 10)
+
+    wait.until(
+        EC.visibility_of_element_located((By.CSS_SELECTOR, "#modalParticipante[style*='display: block']"))
+    )
+
     select2_participante = wait.until(
         EC.element_to_be_clickable((By.ID, "select2-IdPessoa-container"))
     )
@@ -131,12 +140,17 @@ for participante in ata["integrantes"]:
     )
     input_search.clear()
     input_search.send_keys(participante)
-    time.sleep(1)
 
-    # Aguarda até que o nome do participante apareça em algum dos resultados (tolerante a acentos e caixa)
+    # Aguarda até que o nome do participante apareça ou "Nenhum resultado encontrado"
+    timeout = time.time() + 10
     encontrado = False
-    timeout = time.time() + 10  # até 10 segundos
     while time.time() < timeout:
+        # Verifica se apareceu a mensagem de nenhum resultado
+        nenhum_resultado = driver.find_elements(By.CSS_SELECTOR, "#select2-IdPessoa-results li.select2-results__message")
+        if nenhum_resultado and "nenhum resultado encontrado" in nenhum_resultado[0].text.lower():
+            print(f"Nenhum resultado encontrado para: {participante}")
+            encontrado = False
+            break
         resultados = driver.find_elements(By.CSS_SELECTOR, "#select2-IdPessoa-results li.select2-results__option .selectGrid_8")
         for r in resultados:
             if normalizar_nome(participante) in normalizar_nome(r.text):
@@ -149,22 +163,37 @@ for participante in ata["integrantes"]:
         print(f"Participante não encontrado na lista: {participante}")
         continue
 
-    # Agora sim, pressiona ENTER para selecionar o primeiro resultado
     input_search.send_keys(Keys.ENTER)
     time.sleep(0.5)
 
-    # Confirma o participante
     btn_confirmar = wait.until(
         EC.element_to_be_clickable((By.CSS_SELECTOR, "button.btnVerde[data-bind*='ParticipantesViewModel.ParticipanteSalvar']"))
     )
     btn_confirmar.click()
     time.sleep(1)
 
+# --- ANEXO PDF ---
 pdf_path = ata_path.replace('.txt', '.pdf')
 if os.path.exists(pdf_path):
-    btn_add_anexo = driver.find_element(By.CSS_SELECTOR, "a.adicionarGrid[data-bind*='AnexosViewModel.NovoAnexo']")
-    btn_add_anexo.click()
+    btn_add_anexo = wait.until(
+        EC.element_to_be_clickable((By.CSS_SELECTOR, "a.adicionarGrid[data-bind*='AnexosViewModel.NovoAnexo']"))
+    )
+    driver.execute_script("arguments[0].scrollIntoView(true);", btn_add_anexo)
+    time.sleep(0.3)
+    try:
+        btn_add_anexo.click()
+    except Exception:
+        driver.execute_script("arguments[0].click();", btn_add_anexo)
     time.sleep(1)
+
+    # Preenche o campo "Nome" do anexo com o número da ata
+    input_nome_anexo = wait.until(
+        EC.visibility_of_element_located((By.ID, "Nome"))
+    )
+    input_nome_anexo.clear()
+    input_nome_anexo.send_keys(numero_ata)
+    time.sleep(0.3)
+
     file_input = driver.find_element(By.ID, "fileupload")
     file_input.send_keys(pdf_path)
     time.sleep(2)
@@ -176,3 +205,27 @@ if os.path.exists(pdf_path):
     time.sleep(1)
 else:
     print(f"Arquivo PDF não encontrado para anexar: {pdf_path}")
+
+# --- FINALIZAR PROCESSO ---
+try:
+    # Aguarda o botão ficar visível e habilitado
+    btn_salvar = wait.until(
+        EC.element_to_be_clickable((By.XPATH, "//div[contains(@class,'containerBotoes')]//button[contains(@class,'btnVerde') and contains(text(),'Salvar')]"))
+    )
+    # Rola até o botão para garantir que não está fora da viewport
+    driver.execute_script("arguments[0].scrollIntoView(true);", btn_salvar)
+    time.sleep(0.3)
+    try:
+        btn_salvar.click()
+    except Exception:
+        driver.execute_script("arguments[0].click();", btn_salvar)
+    print("Processo finalizado, aguardando confirmação visual...")
+
+    # Aguarda a mensagem de sucesso aparecer
+    wait.until(
+        EC.visibility_of_element_located((By.CSS_SELECTOR, "#smallbox2.SmallBox .textoFoto span"))
+    )
+    print("Registro salvo com sucesso!")
+    time.sleep(1)  # Aguarda mais um pouco para garantir o fechamento da mensagem
+except Exception as e:
+    print("Não foi possível clicar no botão Salvar para finalizar o processo.", e)

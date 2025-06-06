@@ -85,11 +85,14 @@ def extrair_dados_ata(path_pdf):
         matches = re.findall(r'Eng\.(?:\s*\w+\.)*\s*([A-ZÁÉÍÓÚÂÊÔÃÕÇ][^E\n]+)', integrantes_texto)
         for nome in matches:
             nome = nome.strip()
-            # Se o nome da secretária estiver DENTRO do nome, remove só essa parte
+            # Remove o nome da secretária se estiver junto
             if secretaria_nome and secretaria_nome in nome:
                 nome = nome.replace(secretaria_nome, '').strip()
-                # Remove espaços duplicados que podem ficar
                 nome = re.sub(r'\s{2,}', ' ', nome)
+            # Remove qualquer ponto no início ou fim do nome
+            nome = nome.strip('. ')
+            # Remove pontos restantes no nome (caso venham do OCR ou erro de extração)
+            nome = nome.replace('.', '')
             # Adiciona se não estiver vazio e não for duplicado
             if nome and nome not in lista_integrantes:
                 lista_integrantes.append(nome)
